@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>レシートOCR</title>
+  <meta name="theme-color" content="#1a1a2e">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+      color: #e94560;
+    }
+    .camera-area {
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 20px;
+    }
+    video, canvas {
+      width: 100%;
+      border-radius: 12px;
+      display: block;
+    }
+    canvas { display: none; }
+    .preview-img {
+      width: 100%;
+      border-radius: 12px;
+      display: none;
+      margin-bottom: 10px;
+    }
+    .btn {
+      width: 100%;
+      max-width: 400px;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: all 0.2s;
+    }
+    .btn-capture { background: #e94560; color: white; }
+    .btn-capture:hover { background: #c81e45; }
+    .btn-scan { background: #0f3460; color: white; display: none; }
+    .btn-scan:hover { background: #16213e; }
+    .btn-save { background: #2ecc71; color: white; display: none; }
+    .btn-save:hover { background: #27ae60; }
+    .btn-retry { background: #533483; color: white; display: none; }
+    .btn-retry:hover { background: #3d2066; }
+    .btn-secondary {
+      background: #0f3460;
+      color: white;
+      padding: 10px;
+      font-size: 0.95rem;
+      margin-top: 8px;
+    }
+    .btn-danger {
+      background: #7a1f2e;
+      color: white;
+      padding: 8px;
+      font-size: 0.85rem;
+      width: auto;
+      margin: 0;
+    }
+
+    .edit-form {
+      width: 100%;
+      max-width: 400px;
+      display: none;
+      margin-top: 10px;
+    }
+    .edit-form.show { display: block; }
+    .form-group {
+      margin-bottom: 10px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: #e94560;
+      margin-bottom: 4px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #16213e;
+      color: #e0e0e0;
+      font-size: 1rem;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #e94560;
+    }
+    .section-title {
+      font-size: 1rem;
+      color: #e94560;
+      margin: 16px 0 8px;
+      font-weight: bold;
+    }
+    .item-card {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-left: 3px solid #e94560;
+    }
+    .item-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .item-card-header span {
+      font-weight: bold;
+      color: #aaa;
+      font-size: 0.85rem;
+    }
+    .item-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .item-grid .form-group.full {
+      grid-column: 1 / -1;
+    }
+
+    .loading {
+      text-align: center;
+      color: #e94560;
+      font-weight: bold;
+      display: none;
+      margin-bottom: 10px;
+    }
+    .loading.show { display: block; }
+
+    .status {
+      width: 100%;
+      max-width: 400px;
+      margin-top: 15px;
+      padding: 15px;
+      border-radius: 12px;
+      background: #16213e;
+      display: none;
+      text-align: center;
+    }
+    .status.show { display: block; }
+    .status h3 { color: #2ecc71; margin-bottom: 8px; }
+
+    .search-area {
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 20px;
+    }
+    .search-area input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #333;
+      background: #16213e;
+      color: #e0e0e0;
+      font-size: 1rem;
+    }
+    .search-area input:focus {
+      outline: none;
+      border-color: #e94560;
+    }
+    .search-results {
+      width: 100%;
+      max-width: 400px;
+      display: none;
+      margin-bottom: 20px;
+    }
+    .search-results.show { display: block; }
+    .search-card {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-left: 3px solid #e94560;
+    }
+    .search-card-name {
+      font-weight: bold;
+      font-size: 1.05rem;
+      color: #e0e0e0;
+    }
+    .search-card-company {
+      font-size: 0.9rem;
+      color: #888;
+    }
+    .search-card-detail {
+      font-size: 0.85rem;
+      color: #666;
+      margin-top: 4px;
+    }
+    .search-card-detail a {
+      color: #6cb6ff;
+      word-break: break-all;
+    }
+
+    .tabs {
+      display: flex;
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 20px;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .tab {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      background: #16213e;
+      color: #888;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      font-size: 1rem;
+    }
+    .tab.active {
+      background: #e94560;
+      color: white;
+    }
+    .tab-content { display: none; width: 100%; max-width: 400px; }
+    .tab-content.active { display: flex; flex-direction: column; align-items: center; }
+  </style>
+</head>
+<body>
+  <h1>レシートOCR</h1>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="scan">スキャン</button>
+    <button class="tab" data-tab="search">検索</button>
+  </div>
+
+  <!-- スキャンタブ -->
+  <div id="tab-scan" class="tab-content active">
+    <div class="camera-area">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas"></canvas>
+      <img id="preview" class="preview-img" alt="プレビュー">
+    </div>
+
+    <button id="btnCapture" class="btn btn-capture">撮影する</button>
+    <button id="btnScan" class="btn btn-scan">読み取り開始</button>
+    <button id="btnRetry" class="btn btn-retry">撮り直す</button>
+
+    <div id="loading" class="loading">処理中...レシートを読み取っています</div>
+
+    <div id="editForm" class="edit-form">
+      <div class="section-title">レシート情報</div>
+      <div class="form-group"><label>レシート日付</label><input type="date" id="edit-date"></div>
+      <div class="form-group"><label>レシート時間</label><input type="time" id="edit-time"></div>
+      <div class="form-group"><label>店舗（会社名）</label><input type="text" id="edit-store"></div>
+      <div class="form-group"><label>T番号</label><input type="text" id="edit-tNumber" placeholder="T1234567890123"></div>
+
+      <div class="section-title">商品明細</div>
+      <div id="itemsContainer"></div>
+      <button type="button" id="btnAddItem" class="btn btn-secondary">商品行を追加</button>
+
+      <button id="btnSave" class="btn btn-save">この内容で登録する</button>
+      <button id="btnCancel" class="btn btn-retry">キャンセル</button>
+    </div>
+
+    <div id="status" class="status">
+      <h3>登録完了</h3>
+      <p id="statusMsg"></p>
+    </div>
+  </div>
+
+  <!-- 検索タブ -->
+  <div id="tab-search" class="tab-content">
+    <div class="search-area">
+      <input type="text" id="searchInput" placeholder="店舗・商品名・JAN・日付で検索...">
+    </div>
+    <div id="searchResults" class="search-results"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
