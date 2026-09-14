@@ -135,9 +135,44 @@ receipt-ocr/
 
 ### 5. PWA
 
-1. `app.js` の `GAS_URL` にデプロイ URL を設定
-2. ローカルで開くか、GitHub に push して Pages を有効化（main / root）
-3. Pixel の Chrome でアクセス → ホーム画面に追加
+1. `secrets.example.js` をコピーして `secrets.js` を作成（**GitHub には上げない**）
+2. `secrets.js` に次を設定
+   - `GAS_URL` … デプロイURL
+   - `API_TOKEN` … GAS の `CONFIG.API_TOKEN` と**同じ**長いランダム文字列
+3. ローカル試験（どちらか）:
+
+```powershell
+cd C:\Users\user\Projects\receipt-ocr
+python -m http.server 3000
+```
+
+ブラウザで `http://localhost:3000` を開く。  
+（Node.js が入っている場合は `npx --yes serve .` でも可）
+
+止め方: ターミナルで `Ctrl + C`
+
+4. GitHub Pages を使う場合
+   - リポジトリは public でも、`secrets.js` は push しない
+   - Pages に載せるには、手元で `secrets.js` を置いた状態で別途デプロイするか、トークン付きファイルを Pages 用に手動配置する必要がある
+   - **注意:** ブラウザに渡したトークンは、Pages の JS を読めば見える。入口の「URLだけ知っている第三者」やボット対策には有効だが、ソースを読める相手には完全な秘密にはならない
+
+## 入口トークン（API_TOKEN）
+
+- すべての `scan` / `save` / `search` で必須
+- GAS: `CONFIG.API_TOKEN`
+- フロント: `secrets.js` の `API_TOKEN`
+- 未設定（`YOUR_API_TOKEN`）のままだと GAS は `Unauthorized` を返す
+- `doGet`（生存確認 `{"status":"ok"}`）だけはトークン不要
+
+### トークン生成アプリ（同梱）
+
+ブラウザで `token-generator.html` を開く（ローカル試験中なら `http://localhost:3000/token-generator.html`）。
+
+1. 「トークンを生成」→ コピーして GAS の `API_TOKEN` に貼る
+2. デプロイURLを入力（任意）→ 「secrets.js 全文をコピー」
+3. プロジェクトの `secrets.js` に貼り付けて保存
+
+生成はブラウザ内だけ。ネット送信なし。
 
 ## JANコード補完について
 
@@ -147,7 +182,8 @@ receipt-ocr/
 
 ## 注意事項
 
-- `code.gs` の APIキーは公開しない（GitHub には `YOUR_API_KEY` のまま）
+- `code.gs` の APIキー・`API_TOKEN` の実値は公開しない（GitHub にはプレースホルダのまま）
+- `secrets.js` は絶対に commit / push しない
 - Drive 保存時、リンクを知っている人が見られる共有設定にしている（必要なら GAS 内の共有設定を変更）
 - 大きなレシート画像は処理時間が長くなることがある
 - Gemini の JAN 推測は誤る場合がある。確定データとしては編集確認を推奨

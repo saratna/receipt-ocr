@@ -1,0 +1,58 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write secrets.js from GitHub Secrets
+        env:
+          GAS_URL: ${{ secrets.GAS_URL }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+        run: |
+          if [ -z "$GAS_URL" ] || [ -z "$API_TOKEN" ]; then
+            echo "Set repository secrets GAS_URL and API_TOKEN first."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os
+          cfg = {
+            "GAS_URL": os.environ["GAS_URL"],
+            "API_TOKEN": os.environ["API_TOKEN"],
+          }
+          with open("secrets.js", "w", encoding="utf-8") as f:
+              f.write("window.RECEIPT_OCR = ")
+              f.write(json.dumps(cfg, ensure_ascii=False, indent=2))
+              f.write(";\n")
+          PY
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

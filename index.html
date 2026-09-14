@@ -239,6 +239,9 @@
 </head>
 <body>
   <h1>レシートOCR</h1>
+  <p style="margin:-12px 0 16px;font-size:0.85rem;color:#888;">
+    <a href="token-generator.html" style="color:#6cb6ff;">トークン生成</a>
+  </p>
 
   <div class="tabs">
     <button class="tab active" data-tab="scan">スキャン</button>
@@ -288,6 +291,8 @@
     <div id="searchResults" class="search-results"></div>
   </div>
 
+  <!-- secrets.js は gitignore。無い場合は app.js が警告を出す -->
+  <script src="secrets.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

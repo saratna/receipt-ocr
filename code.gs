@@ -4,13 +4,19 @@ const CONFIG = {
   GEMINI_API_KEY: 'YOUR_API_KEY',
   SPREADSHEET_ID: 'YOUR_SPREADSHEET_ID',
   SHEET_NAME: 'レシートDB',
-  DRIVE_FOLDER_ID: 'YOUR_DRIVE_FOLDER_ID'
+  DRIVE_FOLDER_ID: 'YOUR_DRIVE_FOLDER_ID',
+  // フロントの secrets.js と同じ長いランダム文字列にする（GitHub に実値を上げない）
+  API_TOKEN: 'YOUR_API_TOKEN'
 };
 
 // ===== リクエスト受信 =====
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
+    if (!isValidToken(data.token)) {
+      return jsonResponse({ status: 'error', message: 'Unauthorized' });
+    }
+
     const action = data.action || 'scan';
 
     if (action === 'scan') {
@@ -28,7 +34,16 @@ function doPost(e) {
 }
 
 function doGet(e) {
+  // 生存確認のみ（データ操作なし）。トークン不要。
   return jsonResponse({ status: 'ok' });
+}
+
+function isValidToken(token) {
+  const expected = CONFIG.API_TOKEN;
+  if (!expected || expected === 'YOUR_API_TOKEN') {
+    return false;
+  }
+  return token === expected;
 }
 
 // ===== スキャン（OCR + Gemini → 編集用データ） =====

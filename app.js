@@ -1,5 +1,30 @@
-// ===== ここにGASのウェブアプリURLを貼る =====
-const GAS_URL = 'YOUR_GAS_WEBAPP_URL';
+// ===== 接続設定（実値は secrets.js。GitHub には上げない） =====
+const GAS_URL = (window.RECEIPT_OCR && window.RECEIPT_OCR.GAS_URL) || 'YOUR_GAS_WEBAPP_URL';
+const API_TOKEN = (window.RECEIPT_OCR && window.RECEIPT_OCR.API_TOKEN) || 'YOUR_API_TOKEN';
+
+function assertConfig() {
+  if (!GAS_URL || GAS_URL === 'YOUR_GAS_WEBAPP_URL') {
+    alert('secrets.js に GAS_URL を設定してください（secrets.example.js を参照）');
+    return false;
+  }
+  if (!API_TOKEN || API_TOKEN === 'YOUR_API_TOKEN') {
+    alert('secrets.js に API_TOKEN を設定してください（GAS の CONFIG.API_TOKEN と同じ値）');
+    return false;
+  }
+  return true;
+}
+
+async function gasFetch(payload) {
+  if (!assertConfig()) {
+    throw new Error('設定不足');
+  }
+  const response = await fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify(Object.assign({ token: API_TOKEN }, payload)),
+    redirect: 'follow'
+  });
+  return response.json();
+}
 
 // ===== 要素取得 =====
 const video = document.getElementById('video');
@@ -215,13 +240,7 @@ btnScan.addEventListener('click', async () => {
   loading.classList.add('show');
 
   try {
-    const response = await fetch(GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'scan', image: imageBase64 }),
-      redirect: 'follow'
-    });
-
-    const result = await response.json();
+    const result = await gasFetch({ action: 'scan', image: imageBase64 });
     loading.classList.remove('show');
 
     if (result.status === 'success') {
@@ -265,17 +284,11 @@ btnSave.addEventListener('click', async () => {
   loading.classList.add('show');
 
   try {
-    const response = await fetch(GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'save',
-        data: receiptData,
-        image: imageBase64
-      }),
-      redirect: 'follow'
+    const result = await gasFetch({
+      action: 'save',
+      data: receiptData,
+      image: imageBase64
     });
-
-    const result = await response.json();
     loading.classList.remove('show');
     loading.textContent = '処理中...レシートを読み取っています';
 
@@ -314,13 +327,7 @@ searchInput.addEventListener('input', () => {
     }
 
     try {
-      const response = await fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'search', query: query }),
-        redirect: 'follow'
-      });
-
-      const result = await response.json();
+      const result = await gasFetch({ action: 'search', query: query });
 
       if (result.status === 'success' && result.data.length > 0) {
         searchResults.innerHTML = result.data.map(row => `

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>トークン生成 — レシートOCR</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 24px;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    h1 { color: #e94560; font-size: 1.4rem; margin-bottom: 8px; }
+    p { color: #aaa; font-size: 0.95rem; line-height: 1.5; margin-bottom: 16px; }
+    label {
+      display: block;
+      color: #e94560;
+      font-size: 0.85rem;
+      margin-bottom: 6px;
+    }
+    .row { margin-bottom: 16px; }
+    input[type="text"], input[type="number"], textarea {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #333;
+      background: #16213e;
+      color: #e0e0e0;
+      font-size: 1rem;
+      font-family: ui-monospace, Consolas, monospace;
+    }
+    textarea { min-height: 220px; resize: vertical; line-height: 1.4; }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    .btn-primary { background: #e94560; color: #fff; }
+    .btn-secondary { background: #0f3460; color: #fff; }
+    .hint {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 0.9rem;
+      color: #bbb;
+      line-height: 1.6;
+      margin-top: 8px;
+    }
+    .hint strong { color: #e0e0e0; }
+    .ok { color: #2ecc71; font-size: 0.9rem; margin-top: 6px; display: none; }
+    a { color: #6cb6ff; }
+  </style>
+</head>
+<body>
+  <h1>APIトークン生成</h1>
+  <p>
+    GAS の <code>CONFIG.API_TOKEN</code> と、手元の <code>secrets.js</code> に
+    <strong>同じ値</strong>を入れるための文字列を作ります。
+  </p>
+
+  <div class="row">
+    <label for="length">文字数</label>
+    <input type="number" id="length" value="40" min="16" max="128">
+  </div>
+
+  <button type="button" class="btn btn-primary" id="btnGenerate">トークンを生成</button>
+
+  <div class="row">
+    <label for="token">生成されたトークン</label>
+    <input type="text" id="token" readonly>
+    <button type="button" class="btn btn-secondary" id="btnCopyToken">トークンをコピー</button>
+    <div class="ok" id="copiedToken">コピーしました</div>
+  </div>
+
+  <div class="row">
+    <label for="gasUrl">GASデプロイURL（任意・入れると secrets.js 全文を作る）</label>
+    <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/...../exec">
+  </div>
+
+  <div class="row">
+    <label for="secretsOut">secrets.js 用（この内容で上書き保存）</label>
+    <textarea id="secretsOut" readonly></textarea>
+    <button type="button" class="btn btn-secondary" id="btnCopySecrets">secrets.js 全文をコピー</button>
+    <div class="ok" id="copiedSecrets">コピーしました</div>
+  </div>
+
+  <div class="hint">
+    <strong>使い方</strong><br>
+    1. 「トークンを生成」→ トークンをコピー<br>
+    2. Apps Script の <code>API_TOKEN: '....'</code> に貼る → 保存 → 再デプロイ<br>
+    3. デプロイURLを上に貼る（任意）→ 「secrets.js 全文をコピー」<br>
+    4. プロジェクトの <code>secrets.js</code> を開いて全部貼り付けて保存<br>
+    5. <a href="index.html">レシートOCR</a> を開いて試験<br><br>
+    ※ このページ自体はネットに送りません。生成はブラウザ内だけです。
+  </div>
+
+  <script>
+    function generateToken(length) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      const bytes = new Uint8Array(length);
+      crypto.getRandomValues(bytes);
+      let out = '';
+      for (let i = 0; i < length; i++) {
+        out += chars[bytes[i] % chars.length];
+      }
+      return out;
+    }
+
+    function escapeJs(str) {
+      return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    function refreshSecrets() {
+      const token = document.getElementById('token').value || 'YOUR_API_TOKEN';
+      const gasUrl = document.getElementById('gasUrl').value.trim() || 'https://script.google.com/macros/s/XXXX/exec';
+      document.getElementById('secretsOut').value =
+`// このファイルは GitHub に上がりません（.gitignore）
+// GAS の CONFIG.API_TOKEN にも、下の API_TOKEN と「同じ文字」を入れてください
+
+window.RECEIPT_OCR = {
+  GAS_URL: '${escapeJs(gasUrl)}',
+  API_TOKEN: '${escapeJs(token)}'
+};
+`;
+    }
+
+    function showOk(id) {
+      const el = document.getElementById(id);
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 1500);
+    }
+
+    async function copyText(text, okId) {
+      await navigator.clipboard.writeText(text);
+      showOk(okId);
+    }
+
+    document.getElementById('btnGenerate').addEventListener('click', () => {
+      let length = Number(document.getElementById('length').value) || 40;
+      length = Math.min(128, Math.max(16, length));
+      document.getElementById('length').value = length;
+      document.getElementById('token').value = generateToken(length);
+      refreshSecrets();
+    });
+
+    document.getElementById('gasUrl').addEventListener('input', refreshSecrets);
+
+    document.getElementById('btnCopyToken').addEventListener('click', () => {
+      const token = document.getElementById('token').value;
+      if (!token) return;
+      copyText(token, 'copiedToken');
+    });
+
+    document.getElementById('btnCopySecrets').addEventListener('click', () => {
+      refreshSecrets();
+      copyText(document.getElementById('secretsOut').value, 'copiedSecrets');
+    });
+
+    // 初期生成
+    document.getElementById('btnGenerate').click();
+  </script>
+</body>
+</html>
