@@ -300,7 +300,9 @@ btnSave.addEventListener('click', async () => {
         result.data.itemCount + '件登録\n' +
         (result.data.filename || '');
       status.classList.add('show');
-      btnRetry.style.display = 'block';
+      setTimeout(() => {
+        resetCamera();
+      }, 1200);
     } else {
       alert('登録エラー: ' + (result.message || '不明'));
       btnSave.style.display = 'block';
@@ -311,7 +313,9 @@ btnSave.addEventListener('click', async () => {
     editForm.classList.remove('show');
     statusMsg.textContent = '送信しました。シートとDriveを確認してください。';
     status.classList.add('show');
-    btnRetry.style.display = 'block';
+    setTimeout(() => {
+      resetCamera();
+    }, 1200);
   }
 });
 
