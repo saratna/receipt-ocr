@@ -2,6 +2,8 @@
 const CONFIG = {
   VISION_API_KEY: 'YOUR_API_KEY',
   GEMINI_API_KEY: 'YOUR_API_KEY',
+  // 新規キーでは gemini-2.5-flash が使えないため 3.5 を使用
+  GEMINI_MODEL: 'gemini-3.5-flash',
   SPREADSHEET_ID: 'YOUR_SPREADSHEET_ID',
   SHEET_NAME: 'レシートDB',
   DRIVE_FOLDER_ID: 'YOUR_DRIVE_FOLDER_ID',
@@ -150,7 +152,7 @@ function callVisionAPI(imageBase64) {
 
 // ===== Gemini API（レシート構造化） =====
 function callGeminiAPI(imageBase64, ocrText) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + CONFIG.GEMINI_API_KEY;
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + CONFIG.GEMINI_MODEL + ':generateContent?key=' + CONFIG.GEMINI_API_KEY;
 
   const prompt = `あなたは日本のレシートデータ抽出の専門家です。
 以下のOCRテキストとレシート画像から、正確に情報を抽出してください。
@@ -297,7 +299,7 @@ function fillMissingJanCodes(items, imageBase64, store) {
 function lookupJanByProductNames(targets) {
   if (!targets.length) return [];
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + CONFIG.GEMINI_API_KEY;
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + CONFIG.GEMINI_MODEL + ':generateContent?key=' + CONFIG.GEMINI_API_KEY;
   const list = targets.map((t, i) => `${i + 1}. 店舗: ${t.store || ''} / 商品名: ${t.name}`).join('\n');
 
   const prompt = `あなたは日本の商品マスタ（JANコード）に詳しいアシスタントです。
@@ -342,7 +344,7 @@ ${list}
 function lookupJanFromImage(targets, imageBase64) {
   if (!targets.length || !imageBase64) return [];
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + CONFIG.GEMINI_API_KEY;
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + CONFIG.GEMINI_MODEL + ':generateContent?key=' + CONFIG.GEMINI_API_KEY;
   const list = targets.map((t, i) => `${i + 1}. ${t.name}`).join('\n');
 
   const prompt = `レシート画像とOCR付近の情報から、指定商品の JANコード（バーコード数字 8桁/13桁）を読み取ってください。
