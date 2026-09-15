@@ -2,8 +2,13 @@
 const CONFIG = {
   VISION_API_KEY: 'YOUR_API_KEY',
   GEMINI_API_KEY: 'YOUR_API_KEY',
-  // 新規キーでは gemini-2.5-flash 不可。最新の Flash 系を指定
-  GEMINI_MODEL: 'gemini-3.6-flash',
+  // まず使うモデル（混雑時は下の候補へ自動切替）
+  GEMINI_MODEL: 'gemini-3.5-flash',
+  GEMINI_MODEL_FALLBACKS: [
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-flash-latest'
+  ],
   SPREADSHEET_ID: 'YOUR_SPREADSHEET_ID',
   SHEET_NAME: 'レシートDB',
   DRIVE_FOLDER_ID: 'YOUR_DRIVE_FOLDER_ID',
@@ -151,28 +156,57 @@ function callVisionAPI(imageBase64) {
 }
 
 // ===== Gemini API（レシート構造化） =====
-function geminiUrl() {
+function geminiUrl(modelName) {
   return 'https://generativelanguage.googleapis.com/v1beta/models/' +
-    CONFIG.GEMINI_MODEL + ':generateContent?key=' + CONFIG.GEMINI_API_KEY;
+    modelName + ':generateContent?key=' + CONFIG.GEMINI_API_KEY;
+}
+
+function isRetryableGeminiError(code, body) {
+  if (code === 429 || code === 503 || code === 500) return true;
+  const text = String(body || '').toLowerCase();
+  return text.indexOf('high demand') !== -1 ||
+    text.indexOf('resource_exhausted') !== -1 ||
+    text.indexOf('unavailable') !== -1 ||
+    text.indexOf('overloaded') !== -1 ||
+    text.indexOf('try again') !== -1;
 }
 
 function geminiFetch(requestBody) {
-  const response = UrlFetchApp.fetch(geminiUrl(), {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(requestBody),
-    muteHttpExceptions: true
-  });
-  const code = response.getResponseCode();
-  const body = response.getContentText();
-  if (code < 200 || code >= 300) {
-    throw new Error(
-      'Geminiエラー HTTP ' + code +
-      ' / モデル=' + CONFIG.GEMINI_MODEL +
-      ' / ' + body.substring(0, 300)
-    );
+  const models = [CONFIG.GEMINI_MODEL]
+    .concat(CONFIG.GEMINI_MODEL_FALLBACKS || [])
+    .filter(function (m, i, arr) { return m && arr.indexOf(m) === i; });
+
+  var lastError = '';
+
+  for (var mi = 0; mi < models.length; mi++) {
+    var modelName = models[mi];
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      var response = UrlFetchApp.fetch(geminiUrl(modelName), {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(requestBody),
+        muteHttpExceptions: true
+      });
+      var code = response.getResponseCode();
+      var body = response.getContentText();
+
+      if (code >= 200 && code < 300) {
+        return JSON.parse(body);
+      }
+
+      lastError = 'HTTP ' + code + ' / モデル=' + modelName + ' / ' + body.substring(0, 250);
+
+      if (isRetryableGeminiError(code, body)) {
+        Utilities.sleep(1500 * attempt);
+        continue;
+      }
+
+      // 404などリトライ不可 → 次のモデルへ
+      break;
+    }
   }
-  return JSON.parse(body);
+
+  throw new Error('Geminiエラー（混雑またはモデル不可）: ' + lastError);
 }
 
 function callGeminiAPI(imageBase64, ocrText) {
@@ -515,6 +549,7 @@ function testSetup() {
 // ===== Geminiモデル確認（Apps Scriptでこの関数を実行） =====
 function testGeminiModel() {
   Logger.log('CONFIG.GEMINI_MODEL = ' + CONFIG.GEMINI_MODEL);
+  Logger.log('FALLBACKS = ' + JSON.stringify(CONFIG.GEMINI_MODEL_FALLBACKS || []));
 
   const listUrl = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + CONFIG.GEMINI_API_KEY;
   const listRes = UrlFetchApp.fetch(listUrl, { muteHttpExceptions: true });
@@ -525,12 +560,11 @@ function testGeminiModel() {
   const ping = {
     contents: [{ parts: [{ text: 'Reply with OK only.' }] }]
   };
-  const res = UrlFetchApp.fetch(geminiUrl(), {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(ping),
-    muteHttpExceptions: true
-  });
-  Logger.log('generateContent HTTP ' + res.getResponseCode());
-  Logger.log(res.getContentText().substring(0, 800));
+  try {
+    const result = geminiFetch(ping);
+    Logger.log('generateContent OK');
+    Logger.log(JSON.stringify(result).substring(0, 800));
+  } catch (e) {
+    Logger.log(e.toString());
+  }
 }
