@@ -2,8 +2,8 @@
 const CONFIG = {
   VISION_API_KEY: 'YOUR_API_KEY',
   GEMINI_API_KEY: 'YOUR_API_KEY',
-  // 新規キーでは gemini-2.5-flash が使えないため 3.5 を使用
-  GEMINI_MODEL: 'gemini-3.5-flash',
+  // 新規キーでは gemini-2.5-flash 不可。最新の Flash 系を指定
+  GEMINI_MODEL: 'gemini-3.6-flash',
   SPREADSHEET_ID: 'YOUR_SPREADSHEET_ID',
   SHEET_NAME: 'レシートDB',
   DRIVE_FOLDER_ID: 'YOUR_DRIVE_FOLDER_ID',
@@ -151,9 +151,31 @@ function callVisionAPI(imageBase64) {
 }
 
 // ===== Gemini API（レシート構造化） =====
-function callGeminiAPI(imageBase64, ocrText) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + CONFIG.GEMINI_MODEL + ':generateContent?key=' + CONFIG.GEMINI_API_KEY;
+function geminiUrl() {
+  return 'https://generativelanguage.googleapis.com/v1beta/models/' +
+    CONFIG.GEMINI_MODEL + ':generateContent?key=' + CONFIG.GEMINI_API_KEY;
+}
 
+function geminiFetch(requestBody) {
+  const response = UrlFetchApp.fetch(geminiUrl(), {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(requestBody),
+    muteHttpExceptions: true
+  });
+  const code = response.getResponseCode();
+  const body = response.getContentText();
+  if (code < 200 || code >= 300) {
+    throw new Error(
+      'Geminiエラー HTTP ' + code +
+      ' / モデル=' + CONFIG.GEMINI_MODEL +
+      ' / ' + body.substring(0, 300)
+    );
+  }
+  return JSON.parse(body);
+}
+
+function callGeminiAPI(imageBase64, ocrText) {
   const prompt = `あなたは日本のレシートデータ抽出の専門家です。
 以下のOCRテキストとレシート画像から、正確に情報を抽出してください。
 OCRの読み取りミスがあれば文脈から補正してください。
@@ -210,13 +232,7 @@ ${ocrText}
     }
   };
 
-  const response = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(requestBody)
-  });
-
-  const result = JSON.parse(response.getContentText());
+  const result = geminiFetch(requestBody);
   const text = result.candidates[0].content.parts[0].text;
   const parsed = JSON.parse(text);
 
@@ -299,7 +315,6 @@ function fillMissingJanCodes(items, imageBase64, store) {
 function lookupJanByProductNames(targets) {
   if (!targets.length) return [];
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + CONFIG.GEMINI_MODEL + ':generateContent?key=' + CONFIG.GEMINI_API_KEY;
   const list = targets.map((t, i) => `${i + 1}. 店舗: ${t.store || ''} / 商品名: ${t.name}`).join('\n');
 
   const prompt = `あなたは日本の商品マスタ（JANコード）に詳しいアシスタントです。
@@ -324,12 +339,7 @@ ${list}
   };
 
   try {
-    const response = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(requestBody)
-    });
-    const result = JSON.parse(response.getContentText());
+    const result = geminiFetch(requestBody);
     const text = result.candidates[0].content.parts[0].text;
     const arr = JSON.parse(text);
     return arr.map(item => ({
@@ -344,7 +354,6 @@ ${list}
 function lookupJanFromImage(targets, imageBase64) {
   if (!targets.length || !imageBase64) return [];
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + CONFIG.GEMINI_MODEL + ':generateContent?key=' + CONFIG.GEMINI_API_KEY;
   const list = targets.map((t, i) => `${i + 1}. ${t.name}`).join('\n');
 
   const prompt = `レシート画像とOCR付近の情報から、指定商品の JANコード（バーコード数字 8桁/13桁）を読み取ってください。
@@ -379,12 +388,7 @@ ${list}
   };
 
   try {
-    const response = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(requestBody)
-    });
-    const result = JSON.parse(response.getContentText());
+    const result = geminiFetch(requestBody);
     const text = result.candidates[0].content.parts[0].text;
     const arr = JSON.parse(text);
     return arr.map(item => ({
@@ -506,4 +510,27 @@ function testSetup() {
 
   const folder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
   Logger.log('DriveフォルダOK: ' + folder.getName());
+}
+
+// ===== Geminiモデル確認（Apps Scriptでこの関数を実行） =====
+function testGeminiModel() {
+  Logger.log('CONFIG.GEMINI_MODEL = ' + CONFIG.GEMINI_MODEL);
+
+  const listUrl = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + CONFIG.GEMINI_API_KEY;
+  const listRes = UrlFetchApp.fetch(listUrl, { muteHttpExceptions: true });
+  Logger.log('モデル一覧 HTTP ' + listRes.getResponseCode());
+  const listBody = listRes.getContentText();
+  Logger.log(listBody.substring(0, 1500));
+
+  const ping = {
+    contents: [{ parts: [{ text: 'Reply with OK only.' }] }]
+  };
+  const res = UrlFetchApp.fetch(geminiUrl(), {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(ping),
+    muteHttpExceptions: true
+  });
+  Logger.log('generateContent HTTP ' + res.getResponseCode());
+  Logger.log(res.getContentText().substring(0, 800));
 }
